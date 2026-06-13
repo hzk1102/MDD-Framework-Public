@@ -69,11 +69,28 @@ class MDDTrainer:
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate)
         self.ctc_loss = nn.CTCLoss(blank=BLANK_TOKEN_ID)
         self.min_wer = 100.0
+        self.start_epoch = 0
 
         os.makedirs(args.checkpoint_dir, exist_ok=True)
 
+        ckpt_path = os.path.join(args.checkpoint_dir, "checkpoint_wl.pth")
+        if os.path.isfile(ckpt_path):
+            print(f"[Resume] Found checkpoint: {ckpt_path}")
+            ckpt = torch.load(ckpt_path, map_location=self.device)
+            if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+                self.model.load_state_dict(ckpt["model_state_dict"])
+                self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+                self.min_wer = ckpt.get("min_wer", 100.0)
+                self.start_epoch = ckpt.get("epoch", 0) + 1
+                print(f"[Resume] Epoch {self.start_epoch}, min_wer so far: {self.min_wer:.4f}")
+            else:
+                self.model.load_state_dict(ckpt)
+                print(f"[Resume] Loaded weights only (old format). min_wer and epoch not restored.")
+        else:
+            print("[Resume] No checkpoint found, training from scratch.")
+
     def train(self):
-        for epoch in range(self.args.num_epoch):
+        for epoch in range(self.start_epoch, self.args.num_epoch):
             running_loss = self._train_one_epoch(epoch)
             print(f"Training loss: {sum(running_loss) / len(running_loss)}")
             if epoch >= self.args.eval_start_epoch:
@@ -83,7 +100,12 @@ class MDDTrainer:
                     self.min_wer = epoch_wer
                     ckpt_name = "checkpoint_wl.pth"
                     ckpt_path = os.path.join(self.args.checkpoint_dir, ckpt_name)
-                    torch.save(self.model.state_dict(), ckpt_path)
+                    torch.save({
+                        "model_state_dict": self.model.state_dict(),
+                        "optimizer_state_dict": self.optimizer.state_dict(),
+                        "epoch": epoch,
+                        "min_wer": self.min_wer,
+                    }, ckpt_path)
 
                 print(f"wer checkpoint {epoch}: {epoch_wer}")
                 print(f"min_wer: {self.min_wer}")
@@ -201,8 +223,11 @@ class MDDTrainer:
         Each line in the output CSV contains the space-separated token hypothesis for the
         corresponding input audio path.
         """
-        state_dict = torch.load(checkpoint)
-        self.model.load_state_dict(state_dict)
+        ckpt = torch.load(checkpoint)
+        if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+            self.model.load_state_dict(ckpt["model_state_dict"])
+        else:
+            self.model.load_state_dict(ckpt)
         self.model.eval().to(self.device)
         df = pd.read_csv(csv_path)
         paths = df['path'].tolist() if 'path' in df.columns else df['Path'].tolist()

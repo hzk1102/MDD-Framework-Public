@@ -18,23 +18,19 @@ def build_args():
     parser.add_argument('--learning_rate', type=float, default=1e-5)
     return parser.parse_args()
 
-# python main.py --mode infer \
-#   --train_csv /home/h/Data/MDD-Challenge-2025-training-set/metadata/train.csv \
-#   --dev_csv /home/h/Data/MDD-Challenge-2025-training-set/metadata/dev.csv
-
 def infer():
     args = build_args()
     trainer = MDDTrainer(args)
-    INFER_CSV = "test_time.csv"
-    INFER_WAV_DIR = "data/test/wav"
+    INFER_CSV = "/home/h/Data/MDD-Challenge-2025-public-test/MDD-Challenge-2025-public-test/metadata/public_test_phones.csv"
+    INFER_WAV_DIR = "/home/h/Data/MDD-Challenge-2025-public-test/MDD-Challenge-2025-public-test/"
     trainer.inference(csv_path=INFER_CSV, wav_dir=INFER_WAV_DIR, batch_size=4, checkpoint="checkpoint/checkpoint_wl.pth")
 
 
-def main():
-    args = build_args()
-    trainer = MDDTrainer(args)
-    trainer.train()
+# def main():
+#     args = build_args()
+#     trainer = MDDTrainer(args)
+#     trainer.train()
 
 
 if __name__ == '__main__':
-    main()
+    infer()
